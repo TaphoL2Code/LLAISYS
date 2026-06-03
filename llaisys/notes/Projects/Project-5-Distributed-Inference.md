@@ -1,5 +1,7 @@
 # Project #5: Distributed Inference — 事件清单
 
+需要多设备，硬件条件暂不足，跳过
+
 ## 主要修改文件
 
 ### C++ 后端

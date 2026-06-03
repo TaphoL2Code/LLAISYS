@@ -47,7 +47,7 @@
 
 ## 前置准备：理解算子架构
 
-- [ ] **仔细阅读参考实现 `src/ops/add/`**
+- [x] **仔细阅读参考实现 `src/ops/add/`**
   - [src/ops/add/op.hpp](file:///c:/Code/LLAISYS/llaisys/src/ops/add/op.hpp) — C++ 内部声明
   - [src/ops/add/op.cpp](file:///c:/Code/LLAISYS/llaisys/src/ops/add/op.cpp) — 设备分派器
   - [src/ops/add/cpu/add_cpu.hpp](file:///c:/Code/LLAISYS/llaisys/src/ops/add/cpu/add_cpu.hpp) — CPU 实现的声明
@@ -56,143 +56,161 @@
   - 理解**数据流**：Python → ctypes → C API → ops.cc → op.cpp（分派器）→ cpu/xxx.cpp（计算）
   - 理解**编译链**：`xmake/cpu.lua` 将 `src/ops/*/cpu/*.cpp` 编译为 `llaisys-ops-cpu` 静态库
 
-- [ ] **理解通用模式（每个算子都遵守）**
+- [x] **理解通用模式（每个算子都遵守）**
+  
   - `op.cpp` 中做设备一致性检查（`CHECK_SAME_DEVICE`, `CHECK_SAME_SHAPE`, `CHECK_SAME_DTYPE`）
   - 通过 `c->data()` 获取原始 `std::byte*` 指针
   - CPU 实现用模板处理 Float32/Float16/BFloat16 三种数据类型
   - 使用 `llaisys::utils::cast()` 做类型转换（自动处理 fp16 ↔ f32）
-
-- [ ] **运行 add 测试验证理解**
+  
+- [x] **运行 add 测试验证理解**
   - ```bash
     python test/ops/add.py
     ```
 
----
+![](C:\Code\LLAISYS\llaisys\screenshot\Assignment-2-Operators\Snipaste_2026-06-03_10-46-01.png)
 
 ## 任务清单
 
 ### 任务 2.1：argmax
 
-- [ ] **理解 argmax 数学定义**
+- [x] **理解 argmax 数学定义**
   - 沿 `vals` 最后一维找最大值的位置和值
   - `vals` 是 1D 张量（shape = [N]）
   - `max_idx` 和 `max_val` 是 shape = [1] 的张量
 
-- [ ] **创建 `src/ops/argmax/cpu/argmax_cpu.hpp`**
+- [x] **创建 `src/ops/argmax/cpu/argmax_cpu.hpp`**
   - 声明模板函数 `void argmax(...)`，放在 `llaisys::ops::cpu` 命名空间
 
-- [ ] **创建 `src/ops/argmax/cpu/argmax_cpu.cpp`**
+- [x] **创建 `src/ops/argmax/cpu/argmax_cpu.cpp`**
   - 遍历 `vals` 找到最大值的位置和值
   - 支持至少 F32、F16、BF16
   - 使用 `dtype` 分发到具体类型实现
 
-- [ ] **修改 `src/ops/argmax/op.cpp`**
+- [x] **修改 `src/ops/argmax/op.cpp`**
   - 参照 `add/op.cpp` 的模式实现设备分派
 
-- [ ] **验证**
+- [x] **验证**
+  
   - ```bash
     python test/ops/argmax.py
     ```
 
+![](C:\Code\LLAISYS\llaisys\screenshot\Assignment-2-Operators\Snipaste_2026-06-03_10-42-49.png)
+
 ### 任务 2.2：embedding
 
-- [ ] **理解 embedding 数学定义**
+- [x] **理解 embedding 数学定义**
   - 从 `weight`（2D, shape=[vocab_size, embed_dim]）中按 `index`（1D, Int64）取出行
   - `output` 是 2D，shape = [len(index), embed_dim]
 
-- [ ] **创建 `src/ops/embedding/cpu/embedding_cpu.hpp` + `.cpp`**
+- [x] **创建 `src/ops/embedding/cpu/embedding_cpu.hpp` + `.cpp`**
 
-- [ ] **修改 `src/ops/embedding/op.cpp`**
+- [x] **修改 `src/ops/embedding/op.cpp`**
 
-- [ ] **验证**
+- [x] **验证**
   - ```bash
     python test/ops/embedding.py
     ```
 
+![](C:\Code\LLAISYS\llaisys\screenshot\Assignment-2-Operators\Snipaste_2026-06-03_10-43-15.png)
+
 ### 任务 2.3：linear
 
-- [ ] **理解 linear 数学定义**
+- [x] **理解 linear 数学定义**
   - Y = X · W^T + b
   - `in` (2D), `weight` (2D), `bias` (1D, 可选), `out` (2D)
   - 需要支持 bias 为 nullptr（不提供偏置）
 
-- [ ] **创建 `src/ops/linear/cpu/linear_cpu.hpp` + `.cpp`**
+- [x] **创建 `src/ops/linear/cpu/linear_cpu.hpp` + `.cpp`**
   - 实现三层嵌套循环的矩阵乘法
 
-- [ ] **修改 `src/ops/linear/op.cpp`**
+- [x] **修改 `src/ops/linear/op.cpp`**
 
-- [ ] **验证**
+- [x] **验证**
   - ```bash
     python test/ops/linear.py
     ```
 
+![](C:\Code\LLAISYS\llaisys\screenshot\Assignment-2-Operators\Snipaste_2026-06-03_10-43-59.png)
+
 ### 任务 2.4：rms_norm
 
-- [ ] **理解 rms_norm 数学定义**
+- [x] **理解 rms_norm 数学定义**
+  
   - Y_i = W_i * X_i / sqrt(mean(X_i^2) + eps)
   - `in` (2D), `weight` (1D), `out` (2D)
+  
+- [x] **创建 `src/ops/rms_norm/cpu/rms_norm_cpu.hpp` + `.cpp`**
 
-- [ ] **创建 `src/ops/rms_norm/cpu/rms_norm_cpu.hpp` + `.cpp`**
+- [x] **修改 `src/ops/rms_norm/op.cpp`**
 
-- [ ] **修改 `src/ops/rms_norm/op.cpp`**
-
-- [ ] **验证**
+- [x] **验证**
   - ```bash
     python test/ops/rms_norm.py
     ```
 
+![](C:\Code\LLAISYS\llaisys\screenshot\Assignment-2-Operators\Snipaste_2026-06-03_10-44-16.png)
+
 ### 任务 2.5：rope（旋转位置编码）
 
-- [ ] **理解 RoPE 数学定义**
+- [x] **理解 RoPE 数学定义**
   - a'_j = a_j * cos(θ_j) - b_j * sin(θ_j)
   - b'_j = b_j * cos(θ_j) + a_j * sin(θ_j)
   - θ_j = pos_id / (theta^(2j/d))
 
-- [ ] **创建 `src/ops/rope/cpu/rope_cpu.hpp` + `.cpp`**
+- [x] **创建 `src/ops/rope/cpu/rope_cpu.hpp` + `.cpp`**
 
-- [ ] **修改 `src/ops/rope/op.cpp`**
+- [x] **修改 `src/ops/rope/op.cpp`**
 
-- [ ] **验证**
+- [x] **验证**
   - ```bash
     python test/ops/rope.py
     ```
 
+![](C:\Code\LLAISYS\llaisys\screenshot\Assignment-2-Operators\Snipaste_2026-06-03_10-44-29.png)
+
 ### 任务 2.6：self_attention
 
-- [ ] **理解 self_attention 数学定义**
+- [x] **理解 self_attention 数学定义**
   - A = Q · K^T * scale → causal mask → softmax → Y = softmax(A) · V
   - 支持 GQA（Group Query Attention）
 
-- [ ] **创建 `src/ops/self_attention/cpu/self_attention_cpu.hpp` + `.cpp`**
+- [x] **创建 `src/ops/self_attention/cpu/self_attention_cpu.hpp` + `.cpp`**
 
-- [ ] **修改 `src/ops/self_attention/op.cpp`**
+- [x] **修改 `src/ops/self_attention/op.cpp`**
 
-- [ ] **验证**
+- [x] **验证**
   - ```bash
     python test/ops/self_attention.py
     ```
 
+![](C:\Code\LLAISYS\llaisys\screenshot\Assignment-2-Operators\Snipaste_2026-06-03_10-44-40.png)
+
 ### 任务 2.7：swiglu
 
-- [ ] **理解 swiglu 数学定义**
+- [x] **理解 swiglu 数学定义**
   - $$
     out_i = up_i * gate_i / (1 + e^{(-gate_i)})
     $$
   
     
   
-- [ ] **创建 `src/ops/swiglu/cpu/swiglu_cpu.hpp` + `.cpp`**
+- [x] **创建 `src/ops/swiglu/cpu/swiglu_cpu.hpp` + `.cpp`**
 
-- [ ] **修改 `src/ops/swiglu/op.cpp`**
+- [x] **修改 `src/ops/swiglu/op.cpp`**
 
-- [ ] **验证**
+- [x] **验证**
+  
   - ```bash
     python test/ops/swiglu.py
     ```
 
+![](C:\Code\LLAISYS\llaisys\screenshot\Assignment-2-Operators\Snipaste_2026-06-03_10-44-54.png)
+
 ### 任务 2.8：运行全部算子测试
 
-- [ ] **依次运行每个算子测试并提交代码**
+- [x] **依次运行每个算子测试并提交代码**
 
 ### 任务 2.9（可选）：rearrange
 
@@ -202,6 +220,6 @@
 ---
 
 ## 整体验证
-- [ ] 所有 7 个算子测试均通过
-- [ ] 每个算子至少支持 F32、F16、BF16
-- [ ] 理解每个算子在 Qwen2 模型推理中的具体用途
+- [x] 所有 7 个算子测试均通过
+- [x] 每个算子至少支持 F32、F16、BF16
+- [x] 理解每个算子在 Qwen2 模型推理中的具体用途

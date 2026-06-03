@@ -20,6 +20,8 @@
 
 - [x] ### 4.1 src/device/runtime_api.hpp
 
+**`runtime_api.hpp` 定义了根据设备类型（CPU/NVIDIA）获取对应运行时函数表（`LlaisysRuntimeAPI`）的分发接口，并为不支持的设备提供安全兜底，是设备抽象层的核心 API 入口。**
+
 ```
 #pragma once
 #include "llaisys/runtime.h"
@@ -53,6 +55,8 @@ API 分发头文件：
 ---
 
 - [x] ### 4.2 src/device/runtime_api.cpp
+
+**`runtime_api.cpp` 定义了设备无关的运行时 API 分发函数 `getRuntimeAPI`，根据设备类型（CPU/NVIDIA）返回对应的函数表，并为未启用或无效的设备提供统一抛异常的兜底实现（`NOOP_RUNTIME_API`），确保程序在不支持某设备时安全报错而非崩溃。**
 
 ```
 #include "runtime_api.hpp"
@@ -113,6 +117,8 @@ const LlaisysRuntimeAPI *getRuntimeAPI(llaisysDeviceType_t device_type) {
 
 - [x] ### 4.3 src/device/device_resource.hpp
 
+**`device_resource.hpp` 定义了 `DeviceResource` 基类，作为纯数据载体（仅持有设备类型和 ID），为后续 CUDA 等特定设备资源扩展提供统一抽象。**
+
 ```
 #pragma once
 #include "llaisys.h"
@@ -144,6 +150,8 @@ public:
 
 - [x] ### 4.4 src/device/cpu/cpu_resource.hpp
 
+**`cpu_resource.hpp` 定义了 CPU 设备资源类 `Resource`，它继承自 `DeviceResource`，没有额外成员，仅用于表示 CPU 设备（类型固定为 `LLAISYS_DEVICE_CPU`，ID 为 0）。**
+
 ```
 #pragma once
 
@@ -163,6 +171,8 @@ CPU 资源类：继承 `DeviceResource`，没有任何额外成员。仅多了�
 ---
 
 - [x] ### 4.5 src/device/cpu/cpu_resource.cpp
+
+**`cpu_resource.cpp` 实现了 CPU 资源类的构造函数，将设备类型固定为 `LLAISYS_DEVICE_CPU`、设备 ID 固定为 `0`（CPU 只有单一实例），作为后续扩展（如 CUDA 多设备资源）的占位基础。**
 
 ```
 #include "cpu_resource.hpp"

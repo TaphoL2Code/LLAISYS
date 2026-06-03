@@ -2,7 +2,7 @@
 
 问：*为什么需要内存分配器抽象？*
 
-答：*统一 CPU `malloc`/`free` 和 GPU `cudaMalloc`/`cudaFree` 的调用接口——上层代码通过**虚函数多态**调用 `allocate/release`，不知道也不关心内存实际在哪。*
+答：*统一 CPU `malloc`/`free` 和 GPU `cudaMalloc`/`cudaFree` 的调用接口——上层代码通过**虚函数多态**调用 `allocate/release`，不知道也不关心内存实际在哪。是为了实现**多设备***
 
 - [x] ## 第 2 层：Allocator（内存分配器） — 3 个文件
 
@@ -17,6 +17,8 @@
 ---
 
 - [x] ### 2.1 src/core/allocator/allocator.hpp
+
+**`MemoryAllocator` 是设备内存分配器的抽象基类，让整个框架能够以统一的方式在不同设备上分配/释放内存，同时保持设备相关的实现隔离在各自的子类中。**
 
 ```
 #pragma once
@@ -52,6 +54,8 @@ public:
 
 - [x] ### 2.2 src/core/allocator/naive_allocator.hpp
 
+**运行时基础设施层**——为上层算子、模型和 API 提供统一的错误处理、混合精度数据类型、跨设备内存分配能力，是构建高性能推理引擎的基石。
+
 ```
 #pragma once
 
@@ -75,6 +79,8 @@ public:
 ---
 
 - [x] ### 2.3 src/core/allocator/naive_allocator.cpp
+
+**适配任意设备运行时 API 的“透传”分配器，不做任何优化，直接转发内存请求给底层 C 函数。**
 
 ```
 #include "naive_allocator.hpp"
@@ -103,6 +109,7 @@ void NaiveAllocator::release(std::byte *memory) {
 **关键理解**：分配器本身不关心内存在哪。如果 `_api` 是 CPU 运行时，`malloc_device` 就是 `malloc`；如果 `_api` 是 CUDA 运行时，`malloc_device` 就是 `cudaMalloc`。这就是**依赖注入 + 多态**的威力——上层代码零改动即可切换设备。
 
 **调用链追踪**：
+
 ```
 Tensor::create()
   → Runtime::allocateDeviceStorage(size)

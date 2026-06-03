@@ -18,6 +18,8 @@
 
 - [x] ### 1.1 src/utils.hpp
 
+**伞形头文件**（umbrella header），**将子模块头文件聚合到一起**，方便项目其他部分统一包含
+
 ```
 #pragma once
 #include "utils/check.hpp"
@@ -29,6 +31,8 @@
 ---
 
 - [x] ### 1.2 src/utils/check.hpp
+
+**轻量级的运行时检查与错误报告工具集**
 
 ```
 #include <iostream>
@@ -143,6 +147,8 @@
 ---
 
 - [x] ### 1.3 src/utils/types.hpp + src/utils/types.cpp
+
+**自定义半精度浮点类型及转换基础设施**
 
 ```
 #include "llaisys.h"

@@ -17,6 +17,8 @@
 
 - [x] ### 3.1 src/core/context/context.hpp
 
+**`Context` 是线程级的设备运行时管理器，通过单例模式维护不同设备的 Runtime 映射，负责切换和获取当前设备的活跃 Runtime，并禁止拷贝/移动以保证唯一性**
+
 ```
 #pragma once
 
@@ -76,6 +78,8 @@ public:
 ---
 
 - [x] ### 3.2 src/core/context/context.cpp
+
+**`context.cpp` 通过 `thread_local` 实现线程级单例的 `Context`，按优先级（GPU 优先，CPU 兜底）初始化设备 Runtime，并在 `setDevice` 中实现延迟创建与设备切换，确保每个线程可独立绑定不同设备。**
 
 ```
 #include "context.hpp"
@@ -190,6 +194,7 @@ Context &context() {
 这是多用户并发推理（Project 4）的基础——每个请求在独立线程中处理，各自绑定不同的 GPU。
 
 **调用链**：
+
 ```
 用户代码: context().setDevice(NVIDIA, 0)
   → thread_local Context 构造（首次调用时）

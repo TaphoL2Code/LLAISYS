@@ -114,7 +114,20 @@ bool Tensor::isContiguous() const {
 实现：
 
 ```
-
+tensor_t Tensor::view(const std::vector<size_t> &shape) const {
+    CHECK_ARGUMENT(isContiguous(), "view() requires a contiguous tensor");
+    size_t total = std::accumulate(shape.begin(), shape.end(), size_t(1), std::multiplies<size_t>());
+    CHECK_ARGUMENT(total == numel(), "view() shape must have the same number of elements as the original tensor");
+    size_t ndim_ = shape.size();
+    std::vector<ptrdiff_t> new_strides(ndim_);
+    size_t stride = 1;
+    for (size_t i = 0; i < ndim_; i++) {
+        new_strides[ndim_ - 1 - i] = stride;
+        stride *= shape[ndim_ - 1 - i];
+    }
+    TensorMeta new_meta{_meta.dtype, shape, new_strides};
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage, _offset));
+}
 ```
 
 
@@ -133,18 +146,15 @@ bool Tensor::isContiguous() const {
 实现：
 
 ```
-tensor_t Tensor::view(const std::vector<size_t> &shape) const {
-    CHECK_ARGUMENT(isContiguous(), "view() requires a contiguous tensor");
-    size_t total = std::accumulate(shape.begin(), shape.end(), size_t(1), std::multiplies<size_t>());
-    CHECK_ARGUMENT(total == numel(), "view() shape must have the same number of elements as the original tensor");
-    size_t ndim_ = shape.size();
-    std::vector<ptrdiff_t> new_strides(ndim_);
-    size_t stride = 1;
-    for (size_t i = 0; i < ndim_; i++) {
-        new_strides[ndim_ - 1 - i] = stride;
-        stride *= shape[ndim_ - 1 - i];
+tensor_t Tensor::permute(const std::vector<size_t> &order) const {
+    CHECK_ARGUMENT(order.size() == ndim(), "permute() order size must match tensor ndim");
+    std::vector<size_t> new_shape(ndim());
+    std::vector<ptrdiff_t> new_strides(ndim());
+    for (size_t i = 0; i < ndim(); i++) {
+        new_shape[i] = _meta.shape[order[i]];
+        new_strides[i] = _meta.strides[order[i]];
     }
-    TensorMeta new_meta{_meta.dtype, shape, new_strides};
+    TensorMeta new_meta{_meta.dtype, new_shape, new_strides};
     return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage, _offset));
 }
 ```
@@ -168,16 +178,16 @@ tensor_t Tensor::view(const std::vector<size_t> &shape) const {
 实现：
 
 ```
-tensor_t Tensor::permute(const std::vector<size_t> &order) const {
-    CHECK_ARGUMENT(order.size() == ndim(), "permute() order size must match tensor ndim");
-    std::vector<size_t> new_shape(ndim());
-    std::vector<ptrdiff_t> new_strides(ndim());
-    for (size_t i = 0; i < ndim(); i++) {
-        new_shape[i] = _meta.shape[order[i]];
-        new_strides[i] = _meta.strides[order[i]];
-    }
-    TensorMeta new_meta{_meta.dtype, new_shape, new_strides};
-    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage, _offset));
+tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
+    CHECK_ARGUMENT(dim < ndim(), "slice() dim is out of range");
+    CHECK_ARGUMENT(start < _meta.shape[dim], "slice() start is out of range");
+    CHECK_ARGUMENT(end <= _meta.shape[dim], "slice() end is out of range");
+    CHECK_ARGUMENT(start < end, "slice() start must be less than end");
+    std::vector<size_t> new_shape = _meta.shape;
+    new_shape[dim] = end - start;
+    size_t new_offset = _offset + start * _meta.strides[dim] * elementSize();
+    TensorMeta new_meta{_meta.dtype, new_shape, _meta.strides};
+    return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage, new_offset));
 }
 ```
 

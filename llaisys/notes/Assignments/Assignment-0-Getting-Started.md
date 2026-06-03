@@ -51,7 +51,7 @@
     pip install torch transformers accelerate safetensors
     ```
 
-- [x] **（可选）安装 Clang-Format-16**
+- [ ] **（可选）安装 Clang-Format-16**
 
   - 用于 C++ 代码格式化
   - `pip install clang-format` 或根据系统安装
