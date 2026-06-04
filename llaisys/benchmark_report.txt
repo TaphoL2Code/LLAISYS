@@ -1,0 +1,21 @@
+Project #1: CPU Optimization - Benchmark Report
+============================================================
+
+Configuration:
+  linear: {'m': 1, 'k': 1536, 'n': 8960}
+  rms_norm: {'rows': 1, 'cols': 1536}
+  swiglu: {'numel': 8960}
+  rope: {'seq_len': 1, 'n_heads': 12, 'head_dim': 128}
+  self_attention: {'qlen': 1, 'kvlen': 256, 'nh': 12, 'nkvh': 2, 'hd': 128}
+
+Warmup: 10, Repeat: 100
+
+Results (per-op avg, ms):
+----------------------------------------
+  linear              :     6.5740 ms
+  rms_norm            :     0.0017 ms
+  swiglu              :     0.0237 ms
+  rope                :     0.0036 ms
+  self_attention      :     0.3291 ms
+----------------------------------------
+  Total               :     6.9321 ms

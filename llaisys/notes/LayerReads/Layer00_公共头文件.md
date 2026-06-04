@@ -389,14 +389,14 @@ __C {
 | 函数 | 功能 | 输入 | 输出 |
 |:--|:--|:--|:--|
 | `llaisysAdd` | 逐元素加法 | a, b | c = a + b |
-| `llaisysArgmax` | 沿维度取最大值索引 | vals | max_idx, max_val |
+| `llaisysArgmax` | 沿维度取最大值及其索引 | vals | max_idx, max_val |
 | `llaisysEmbedding` | 词嵌入查表 | index, weight | out = weight[index] |
 | `llaisysLinear` | 线性变换 | in, weight, bias | out = in × W^T + b |
 | `llaisysRearrange` | 维度重排 | in | out（按特定模式重排） |
-| `llaisysRmsNorm` | RMS 归一化 | in, weight, eps | out = RMSNorm(in) |
-| `llaisysROPE` | 旋转位置编码 | in, pos_ids, theta | out（RoPE 旋转后） |
+| `llaisysRmsNorm` | RMS 归一化（替代Layer归一化） | in, weight, eps | out = RMSNorm(in) |
+| `llaisysROPE` | 旋转位置编码（替代正弦/余弦编码） | in, pos_ids, theta | out（RoPE 旋转后） |
 | `llaisysSelfAttention` | 自注意力 | q, k, v, scale | attn_val = softmax(QK^T/√d)·V |
-| `llaisysSwiGLU` | SwiGLU 激活 | gate, up | out = gate × SiLU(up) |
+| `llaisysSwiGLU` | SwiGLU 激活（替代ReLU、GELU ） | gate, up | out = gate × SiLU(up) |
 
 注意：所有输出张量需要在调用前由调用者预先创建好（`tensorCreate`），算子只负责填充数据，不负责分配内存。
 

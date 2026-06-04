@@ -64,11 +64,11 @@
         std::cerr << "[ERROR] Unsupported data type: "    \
                   << llaisys::utils::dtype_to_str(DT__)   \
                   << EXCEPTION_LOCATION_MSG << std::endl; \
-        throw std::runtime_error("Unsupported device");   \
+        throw std::runtime_error("Unsupported data type");   \
     } while (0)
 ```
 
-不支持的数据类型异常：与上面类似，但接受一个参数 `DT__`——会调用 `dtype_to_str()` 将枚举值转为可读字符串（如 `"bfloat16"`），打印具体是哪种类型不支持。
+不支持的数据类型异常：与上面类似，但接受一个参数 `DT__`——会调用 `dtype_to_str()` 将枚举值转为可读字符串（如 `"bfloat16"`），打印具体是哪种类型不支持。**这里原项目代码有问题，异常抛出信息错误**
 
 ```
 #define CHECK_ARGUMENT(condition, message)                                                 \
