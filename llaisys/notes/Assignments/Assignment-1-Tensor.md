@@ -61,10 +61,16 @@ LLAISYS 使用行主序。例如 shape = (2, 3, 5) 的 float32 张量：
 
 ```
 void Tensor::load(const void *src_) {
-    size_t size = numel() * elementSize(); 						// 计算大小
-    core::context().setDevice(deviceType(), deviceId());		// 找活动设备（目标地址）
-    const auto *api = core::context().runtime().api();			// 找运行时对象
-    api->memcpy_sync(data(), src_, size, LLAISYS_MEMCPY_H2D);	// 拷贝
+    // 计算需要拷贝的总字节数：元素个数 × 每个元素的字节数
+    size_t size = numel() * elementSize(); 
+    // 根据张量当前所在的设备类型（如 CPU/CUDA）和设备 ID，设置当前上下文的活动设备
+    // 这样后续的内存操作（如 memcpy）就会在正确的目标设备上执行
+    core::context().setDevice(deviceType(), deviceId()); // 找活动设备（目标地址）
+    // 获取当前运行时（runtime）的底层 API 接口指针，该接口提供了同步内存拷贝等底层函数
+    const auto *api = core::context().runtime().api();   // 找运行时对象
+    // 调用底层 API 的同步内存拷贝函数，将数据从主机（src_）拷贝到设备端张量的数据指针（data()）
+    // LLAISYS_MEMCPY_H2D 表示拷贝方向：Host to Device（主机到设备）
+    api->memcpy_sync(data(), src_, size, LLAISYS_MEMCPY_H2D); // 拷贝
 }
 ```
 
@@ -84,15 +90,23 @@ void Tensor::load(const void *src_) {
 
 ```
 bool Tensor::isContiguous() const {
-    size_t ndim_ = ndim();											// 获取张量维度
-    if (ndim_ == 0) return true;									// 0维规定为连续
-    size_t stride = 1;												// 最后一个维度期望的stride
-    for (size_t i = 0; i < ndim_; i++) {							// 从最后一个维度向第一个维度遍历
-        if (_meta.strides[ndim_ - 1 - i] != (ptrdiff_t)stride) {	// 实际 stride 与期望不符 → 不连续
-            return false;
+    // 获取张量的维度数
+    size_t ndim_ = ndim();
+    // 0 维张量（标量）规定为连续
+    if (ndim_ == 0) return true;
+    // 从最内层（最后一维）开始的期望步长，初始为 1（最后一个元素相邻间隔为 1）
+    size_t stride = 1;
+    // 从最后一个维度向第一个维度遍历（i = 0 对应最后一维，i = ndim_-1 对应第一维）
+    for (size_t i = 0; i < ndim_; i++) {
+        // 检查当前维度的实际步长是否等于期望的步长
+        // 注意：_meta.strides 存储的是每个维度的实际步长（字节数或元素个数间隔）
+        if (_meta.strides[ndim_ - 1 - i] != (ptrdiff_t)stride) {
+            return false;   // 一旦有任何维度步长不符，说明内存不连续
         }
-        stride *= _meta.shape[ndim_ - 1 - i];						// 更新当前期望维度
+        // 更新期望步长：下一个外层维度的步长 = 当前维度步长 × 当前维度的长度
+        stride *= _meta.shape[ndim_ - 1 - i];
     }
+    // 所有维度都符合行优先连续的条件，返回 true
     return true;
 }
 ```
@@ -119,17 +133,29 @@ bool Tensor::isContiguous() const {
 
 ```
 tensor_t Tensor::view(const std::vector<size_t> &shape) const {
+    // 要求原张量在内存中连续，否则无法安全地重新解释形状
     CHECK_ARGUMENT(isContiguous(), "view() requires a contiguous tensor");
+    
+    // 计算新形状下的总元素个数：将 shape 中所有维度相乘
     size_t total = std::accumulate(shape.begin(), shape.end(), size_t(1), std::multiplies<size_t>());
+    // 新形状的总元素数必须与原张量的元素总数相等，否则视图非法
     CHECK_ARGUMENT(total == numel(), "view() shape must have the same number of elements as the original tensor");
-    size_t ndim_ = shape.size();
-    std::vector<ptrdiff_t> new_strides(ndim_);
-    size_t stride = 1;
+    
+    size_t ndim_ = shape.size();                 // 新形状的维度数
+    std::vector<ptrdiff_t> new_strides(ndim_);  // 存储计算出的新步长（每个维度相邻元素间隔的字节数）
+    size_t stride = 1;                          // 从最后一个维度开始累积步长（行优先，即 C 连续）
+    
+    // 倒序计算每个维度的步长：最内层（最后一维）步长为1，向前依次为 shape[i+1]*stride[i+1]
     for (size_t i = 0; i < ndim_; i++) {
+        // 从后往前填充 new_strides：第 ndim_-1-i 维（即倒数第 i+1 维）的步长设为当前累积值
         new_strides[ndim_ - 1 - i] = stride;
+        // 更新步长：乘以当前维度的长度，作为前一个维度的步长
         stride *= shape[ndim_ - 1 - i];
     }
+    
+    // 构造新的元数据：使用原来的数据类型、新的形状、计算出的新步长
     TensorMeta new_meta{_meta.dtype, shape, new_strides};
+    // 创建新的 Tensor 对象，共享原有的存储（_storage）和偏移量（_offset），但使用新的视图元数据
     return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage, _offset));
 }
 ```
@@ -151,14 +177,23 @@ tensor_t Tensor::view(const std::vector<size_t> &shape) const {
 
 ```
 tensor_t Tensor::permute(const std::vector<size_t> &order) const {
+    // 检查 order 的长度必须等于当前张量的维度数，否则抛出参数错误
     CHECK_ARGUMENT(order.size() == ndim(), "permute() order size must match tensor ndim");
+    // 创建新形状向量，长度与当前维度数相同
     std::vector<size_t> new_shape(ndim());
+    // 创建新步长向量，长度与当前维度数相同
     std::vector<ptrdiff_t> new_strides(ndim());
+    // 遍历新维度的每个位置 i
     for (size_t i = 0; i < ndim(); i++) {
+        // 新形状的第 i 维 = 原形状中第 order[i] 维的大小
         new_shape[i] = _meta.shape[order[i]];
+        // 新步长的第 i 维 = 原步长中第 order[i] 维的大小
         new_strides[i] = _meta.strides[order[i]];
     }
+    // 构造新的张量元数据：数据类型沿用原张量，使用计算出的新形状和新步长
     TensorMeta new_meta{_meta.dtype, new_shape, new_strides};
+    // 创建新的 Tensor 对象，共享原张量的存储（_storage）和偏移（_offset），但使用新的视图元数据
+    // 返回智能指针管理的 Tensor 实例
     return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage, _offset));
 }
 ```
@@ -183,14 +218,25 @@ tensor_t Tensor::permute(const std::vector<size_t> &order) const {
 
 ```
 tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
+    // 检查切片的维度 dim 是否在有效范围内 [0, ndim())
     CHECK_ARGUMENT(dim < ndim(), "slice() dim is out of range");
+    // 检查起始索引 start 是否小于该维度的长度
     CHECK_ARGUMENT(start < _meta.shape[dim], "slice() start is out of range");
+    // 检查结束索引 end 是否不超过该维度的长度
     CHECK_ARGUMENT(end <= _meta.shape[dim], "slice() end is out of range");
+    // 确保 start < end，即切片范围非空
     CHECK_ARGUMENT(start < end, "slice() start must be less than end");
+    // 复制原张量的形状（std::vector<size_t>）
     std::vector<size_t> new_shape = _meta.shape;
+    // 修改新形状：指定维度的大小变为 end - start（切片后的长度）
     new_shape[dim] = end - start;
+    // 计算新视图在底层存储中的偏移量（字节为单位）
+    // 原偏移 _offset + (start * 该维度的步长 * 每个元素字节数)
     size_t new_offset = _offset + start * _meta.strides[dim] * elementSize();
+    // 创建新的张量元数据：数据类型不变，使用新的形状，但步长数组与原张量相同（因为切片不改变步长）
     TensorMeta new_meta{_meta.dtype, new_shape, _meta.strides};
+    // 构造新的 Tensor 对象，共享原存储（_storage）和计算出的新偏移量，使用新元数据
+    // 返回智能指针管理的 Tensor 实例（tensor_t 是 shared_ptr<Tensor> 的别名）
     return std::shared_ptr<Tensor>(new Tensor(new_meta, _storage, new_offset));
 }
 ```

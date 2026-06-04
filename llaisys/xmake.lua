@@ -119,7 +119,22 @@ target("llaisys")
     add_deps("llaisys-ops")
     add_deps("llaisys-qwen2")
 
-    set_languages("cxx17")
+    if has_config("nv-gpu") then
+        set_languages("cuda17", "cxx17")
+        add_links("cudart")
+        add_defines("ENABLE_NVIDIA_API")
+        add_files("src/device/nvidia/*.cu")
+        add_files("src/ops/*/nvidia/*.cu")
+        add_cuflags("-arch=sm_75", "-gencode=arch=compute_75,code=sm_75")
+        add_cuflags("-gencode=arch=compute_80,code=sm_80")
+        add_cuflags("-gencode=arch=compute_86,code=sm_86")
+        add_cuflags("-gencode=arch=compute_89,code=sm_89")
+        add_cuflags("--expt-relaxed-constexpr")
+        add_cuflags("-allow-unsupported-compiler")
+        add_cuflags("-Xcompiler=/MD", "-Xcompiler=/wd4819")
+    else
+        set_languages("cxx17")
+    end
     set_warnings("all", "error")
     add_files("src/llaisys/*.cc")
     set_installdir(".")

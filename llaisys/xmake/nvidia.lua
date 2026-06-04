@@ -1,0 +1,3 @@
+-- NVIDIA CUDA Compilation Configuration
+-- CUDA source files are compiled directly into the llaisys shared library
+-- This ensures nvcc handles device linking properly

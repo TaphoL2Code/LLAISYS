@@ -32,7 +32,7 @@
 
 - [x] ### 1.2 src/utils/check.hpp
 
-**轻量级的运行时检查与错误报告工具集**
+**异常检查与错误报告工具集**
 
 ```
 #include <iostream>

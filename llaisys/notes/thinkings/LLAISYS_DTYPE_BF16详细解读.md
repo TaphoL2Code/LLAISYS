@@ -276,4 +276,4 @@ test/test_utils.py           → torch.bfloat16 ↔ llaisys.DataType.BF16 映射
 
 ## 七、一句话总结
 
-**BF16 是 FP32 的高 16 位截断，牺牲精度换范围安全。** 在 LLAISYS 中，BF16 通过 `CustomBFloat16{uint16_t}` 存储，与 FP32 互转只需移位操作（无需指数偏置转换），在 CPU 上做算术运算时需通过 float 中转。
+**BF16 是 FP32 的高 16 位截断，在节省一半内存的相同优势下，相比FP16牺牲精度换范围安全。** 在 LLAISYS 中，BF16 通过 `CustomBFloat16{uint16_t}` 存储，与 FP32 互转只需移位操作（无需指数偏置转换），在 CPU 上做算术运算时需通过 float 中转。
