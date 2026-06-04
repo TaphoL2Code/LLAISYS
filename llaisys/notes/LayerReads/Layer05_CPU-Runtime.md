@@ -127,4 +127,4 @@ const LlaisysRuntimeAPI *getRuntimeAPI() {
 | `memcpySync` | 抛异常 | `std::memcpy` |
 | 其他 8 个 | 抛异常 | 空操作 |
 
-NOOP 是"这个设备不存在"，CPU 是"这个设备就是 CPU 自己"。**这就是统一接口的威力——换一个函数表，不换一行上层代码。**
+NOOP 是"这个设备不存在"，CPU 是"这个设备就是 CPU 自己"。这就是统一接口的威力——换一个函数表，不换一行上层代码。

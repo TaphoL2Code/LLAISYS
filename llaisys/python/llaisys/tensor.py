@@ -72,8 +72,13 @@ class Tensor:
     def __repr__(self):
         return f"<Tensor shape={self.shape}, dtype={self.dtype}, device={self.device_type}:{self.device_id}>"
 
-    def load(self, data: c_void_p):
-        LIB_LLAISYS.tensorLoad(self._tensor, data)
+    def load(self, data):
+        import numpy as np
+        if isinstance(data, np.ndarray):
+            ptr = data.ctypes.data_as(c_void_p)
+        else:
+            ptr = data
+        LIB_LLAISYS.tensorLoad(self._tensor, ptr)
 
     def is_contiguous(self) -> bool:
         return bool(LIB_LLAISYS.tensorIsContiguous(self._tensor))

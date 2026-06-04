@@ -61,10 +61,10 @@ LLAISYS 使用行主序。例如 shape = (2, 3, 5) 的 float32 张量：
 
 ```
 void Tensor::load(const void *src_) {
-    size_t size = numel() * elementSize();
-    core::context().setDevice(deviceType(), deviceId());
-    const auto *api = core::context().runtime().api();
-    api->memcpy_sync(data(), src_, size, LLAISYS_MEMCPY_H2D);
+    size_t size = numel() * elementSize(); 						// 计算大小
+    core::context().setDevice(deviceType(), deviceId());		// 找活动设备（目标地址）
+    const auto *api = core::context().runtime().api();			// 找运行时对象
+    api->memcpy_sync(data(), src_, size, LLAISYS_MEMCPY_H2D);	// 拷贝
 }
 ```
 
@@ -84,18 +84,22 @@ void Tensor::load(const void *src_) {
 
 ```
 bool Tensor::isContiguous() const {
-    size_t ndim_ = ndim();
-    if (ndim_ == 0) return true;
-    size_t stride = 1;
-    for (size_t i = 0; i < ndim_; i++) {
-        if (_meta.strides[ndim_ - 1 - i] != (ptrdiff_t)stride) {
+    size_t ndim_ = ndim();											// 获取张量维度
+    if (ndim_ == 0) return true;									// 0维规定为连续
+    size_t stride = 1;												// 最后一个维度期望的stride
+    for (size_t i = 0; i < ndim_; i++) {							// 从最后一个维度向第一个维度遍历
+        if (_meta.strides[ndim_ - 1 - i] != (ptrdiff_t)stride) {	// 实际 stride 与期望不符 → 不连续
             return false;
         }
-        stride *= _meta.shape[ndim_ - 1 - i];
+        stride *= _meta.shape[ndim_ - 1 - i];						// 更新当前期望维度
     }
     return true;
 }
 ```
+
+理解Stride:[【闪客】你管这破玩意叫张量？_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1SB2gBFEyu/?spm_id_from=333.337.search-card.all.click&vd_source=58f16a4c0a88e0fb3322fd63829f82ce)的前半部分
+
+![](C:\Code\LLAISYS\llaisys\notes\thinkings\image\Snipaste_2026-06-03_15-23-03.png)
 
 ### 任务 1.3：实现 `view(const std::vector<size_t> &shape) const`
 

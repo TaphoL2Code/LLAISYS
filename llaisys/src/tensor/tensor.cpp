@@ -223,8 +223,31 @@ tensor_t Tensor::slice(size_t dim, size_t start, size_t end) const {
 }
 
 tensor_t Tensor::contiguous() const {
-    TO_BE_IMPLEMENTED();
-    return std::shared_ptr<Tensor>(new Tensor(_meta, _storage));
+    if (isContiguous()) {
+        return std::shared_ptr<Tensor>(new Tensor(_meta, _storage, _offset));
+    }
+    // Create a new contiguous tensor with the same data
+    auto new_tensor = Tensor::create(_meta.shape, _meta.dtype, deviceType(), deviceId());
+    std::byte *dst = new_tensor->data();
+    const std::byte *src = data();
+    size_t element_sz = elementSize();
+    // Copy element by element for non-contiguous layout
+    if (ndim() == 1) {
+        for (size_t i = 0; i < _meta.shape[0]; i++) {
+            std::memcpy(dst + i * element_sz, src + i * _meta.strides[0] * element_sz, element_sz);
+        }
+    } else if (ndim() == 2) {
+        for (size_t i = 0; i < _meta.shape[0]; i++) {
+            for (size_t j = 0; j < _meta.shape[1]; j++) {
+                size_t offset = (i * _meta.strides[0] + j * _meta.strides[1]) * element_sz;
+                size_t new_offset = (i * _meta.shape[1] + j) * element_sz;
+                std::memcpy(dst + new_offset, src + offset, element_sz);
+            }
+        }
+    } else {
+        TO_BE_IMPLEMENTED();
+    }
+    return new_tensor;
 }
 
 tensor_t Tensor::reshape(const std::vector<size_t> &shape) const {
