@@ -110,6 +110,21 @@ target("llaisys-qwen2")
     on_install(function (target) end)
 target_end()
 
+target("llaisys-llama")
+    set_kind("static")
+    add_deps("llaisys-ops")
+
+    set_languages("cxx17")
+    set_warnings("all", "error")
+    if not is_plat("windows") then
+        add_cxflags("-fPIC", "-Wno-unknown-pragmas")
+    end
+
+    add_files("src/models/llama/*.cpp")
+
+    on_install(function (target) end)
+target_end()
+
 target("llaisys")
     set_kind("shared")
     add_deps("llaisys-utils")
@@ -118,6 +133,7 @@ target("llaisys")
     add_deps("llaisys-tensor")
     add_deps("llaisys-ops")
     add_deps("llaisys-qwen2")
+    add_deps("llaisys-llama")
 
     if has_config("nv-gpu") then
         set_languages("cuda17", "cxx17")
