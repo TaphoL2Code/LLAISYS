@@ -257,6 +257,8 @@ __C {
 
 不透明句柄：`llaisysTensor_t` 是一个指向 `LlaisysTensor` 结构体的指针，但结构体定义不对外暴露（定义在 `src/tensor/tensor.hpp` 中）。Python 端通过 ctypes 持有这个 `void*` 指针，调用 C API 时传入。
 
+这行代码定义了一个**不透明指针类型**。它常用于 C 语言中实现**信息隐藏**与**封装**。
+
 ```
     __export llaisysTensor_t tensorCreate(
         size_t * shape,
@@ -407,6 +409,8 @@ __C {
 注意：所有输出张量需要在调用前由调用者预先创建好（`tensorCreate`），算子只负责填充数据，不负责分配内存。
 
 - [x] ### 0.5 include/llaisys/models/qwen2.h
+
+**元数据结构+权重结构体+不透明的模型对象+API函数**
 
 ```
 #ifndef LLAISYS_MODELS_QWEN2_H
