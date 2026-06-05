@@ -28,4 +28,14 @@ __C {
         auto *m = reinterpret_cast<llaisys::models::Qwen2Model *>(model);
         return m->infer(token_ids, ntoken);
     }
+
+    void llaisysQwen2ModelForward(struct LlaisysQwen2Model *model, int64_t *token_ids, size_t ntoken, float *logits_out) {
+        auto *m = reinterpret_cast<llaisys::models::Qwen2Model *>(model);
+        m->forward(token_ids, ntoken, logits_out);
+    }
+
+    void llaisysQwen2ModelResetKV(struct LlaisysQwen2Model *model) {
+        auto *m = reinterpret_cast<llaisys::models::Qwen2Model *>(model);
+        m->reset_kv_cache();
+    }
 }

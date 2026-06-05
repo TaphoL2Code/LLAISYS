@@ -245,4 +245,108 @@ int64_t Qwen2Model::infer(const int64_t *token_ids, size_t ntoken) {
     }
 }
 
+// =========================================================================
+// Forward pass returning raw logits (for sampling)
+// =========================================================================
+void Qwen2Model::forward(const int64_t *token_ids, size_t ntoken, float *logits_out) {
+    size_t hs = _meta.hs;
+    size_t nh = _meta.nh;
+    size_t dh = _meta.dh;
+    size_t voc = _meta.voc;
+
+    if (_cur_seq_len == 0) {
+        // === First call: prefill all input tokens ===
+        // Embedding
+        auto idx = Tensor::create({ntoken}, LLAISYS_DTYPE_I64, _device, _device_id);
+        std::memcpy(idx->data(), token_ids, ntoken * sizeof(int64_t));
+
+        auto x = _create_tensor({ntoken, hs});
+        ops::embedding(x, idx, _weights.in_embed->tensor);
+
+        // Position IDs
+        auto pos_ids = Tensor::create({ntoken}, LLAISYS_DTYPE_I64, _device, _device_id);
+        auto *pos_data = reinterpret_cast<int64_t *>(pos_ids->data());
+        for (size_t i = 0; i < ntoken; i++) {
+            pos_data[i] = static_cast<int64_t>(i);
+        }
+
+        // Forward through all layers
+        auto attn_out = _create_tensor({ntoken, hs});
+        auto ffn_out  = _create_tensor({ntoken, hs});
+        for (size_t layer = 0; layer < _meta.nlayer; layer++) {
+            _transformer_block(layer, x, pos_ids, attn_out, ffn_out);
+            x = ffn_out;
+        }
+        _cur_seq_len = ntoken;
+
+        // Final RMS Norm (only last token)
+        auto last_hidden = x->slice(0, ntoken - 1, ntoken);
+        auto final_norm = _create_tensor({1, hs});
+        ops::rms_norm(final_norm, last_hidden, _weights.out_norm_w->tensor, _meta.epsilon);
+
+        // Output projection (logits)
+        auto logits = _create_tensor({1, voc});
+        ops::linear(logits, final_norm, _weights.out_embed->tensor, nullptr);
+
+        // Copy logits to output buffer
+        _copy_logits_to_host(logits, logits_out, voc);
+    } else {
+        // === Subsequent call: decode one new token ===
+        int64_t new_token = token_ids[_cur_seq_len];
+
+        auto idx = Tensor::create({1}, LLAISYS_DTYPE_I64, _device, _device_id);
+        reinterpret_cast<int64_t *>(idx->data())[0] = new_token;
+
+        auto x = _create_tensor({1, hs});
+        ops::embedding(x, idx, _weights.in_embed->tensor);
+
+        // Position ID
+        auto pos_ids = Tensor::create({1}, LLAISYS_DTYPE_I64, _device, _device_id);
+        reinterpret_cast<int64_t *>(pos_ids->data())[0] = static_cast<int64_t>(_cur_seq_len);
+
+        // Forward through all layers
+        auto attn_out = _create_tensor({1, hs});
+        auto ffn_out  = _create_tensor({1, hs});
+        for (size_t layer = 0; layer < _meta.nlayer; layer++) {
+            _transformer_block(layer, x, pos_ids, attn_out, ffn_out);
+            x = ffn_out;
+        }
+        _cur_seq_len++;
+
+        // Final RMS Norm
+        auto final_norm = _create_tensor({1, hs});
+        ops::rms_norm(final_norm, x, _weights.out_norm_w->tensor, _meta.epsilon);
+
+        // Output projection
+        auto logits = _create_tensor({1, voc});
+        ops::linear(logits, final_norm, _weights.out_embed->tensor, nullptr);
+
+        // Copy logits to output buffer
+        _copy_logits_to_host(logits, logits_out, voc);
+    }
+}
+
+// =========================================================================
+// Copy logits from device tensor to host buffer
+// =========================================================================
+void Qwen2Model::_copy_logits_to_host(tensor_t logits, float *logits_out, size_t voc) {
+    size_t logits_size = voc * sizeof(float);
+    if (_device == LLAISYS_DEVICE_CPU) {
+        std::memcpy(logits_out, logits->data(), logits_size);
+    } else {
+        // GPU: copy from device to host
+        auto *api = llaisys::core::context().runtime().api();
+        if (api && api->memcpy_sync) {
+            api->memcpy_sync(logits_out, logits->data(), logits_size, LLAISYS_MEMCPY_D2H);
+        }
+    }
+}
+
+// =========================================================================
+// Reset KV-cache for new conversation
+// =========================================================================
+void Qwen2Model::reset_kv_cache() {
+    _cur_seq_len = 0;
+}
+
 } // namespace llaisys::models

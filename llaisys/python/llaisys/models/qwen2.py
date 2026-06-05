@@ -1,8 +1,9 @@
-from typing import Sequence, List
+from typing import Sequence, List, Dict
 from ..libllaisys import LIB_LLAISYS
 from ..libllaisys import DeviceType, DataType
 from ..libllaisys.qwen2 import LlaisysQwen2Meta
 from ..tensor import Tensor
+from ..sampler import sample
 
 from pathlib import Path
 import json
@@ -88,6 +89,7 @@ class Qwen2:
         self._nlayer = nlayer
         self._dtype = dtype
         self._end_token = end_token
+        self._voc_size = voc
 
         # --- Load weights ---
         weights_ptr = LIB_LLAISYS.llaisysQwen2ModelWeights(self._model)
@@ -185,20 +187,52 @@ class Qwen2:
         self,
         inputs: Sequence[int],
         max_new_tokens: int = 128,
-        top_k: int = 1,
-        top_p: float = 0.8,
+        top_k: int = 0,
+        top_p: float = 1.0,
         temperature: float = 0.8,
     ) -> List[int]:
+        """Generate tokens with sampling support.
+
+        Args:
+            inputs: Input token IDs.
+            max_new_tokens: Maximum number of tokens to generate.
+            top_k: Top-k filtering. 0 = disabled.
+            top_p: Top-p (nucleus) filtering. 1.0 = disabled.
+            temperature: Temperature for sampling. 0 = greedy (argmax).
+
+        Returns:
+            List of generated token IDs (including inputs).
+        """
         token_ids = list(inputs)
+        ntoken = len(token_ids)
+        arr_type = c_int64 * ntoken
+        arr = arr_type(*token_ids)
+
+        # Pre-allocate logits buffer
+        logits = None
 
         for _ in range(max_new_tokens):
             ntoken = len(token_ids)
-            arr_type = c_int64 * ntoken
-            arr = arr_type(*token_ids)
 
-            next_token = LIB_LLAISYS.llaisysQwen2ModelInfer(
-                self._model, arr, c_size_t(ntoken)
-            )
+            if temperature <= 0:
+                # Greedy: use the fast C++ infer method
+                next_token = LIB_LLAISYS.llaisysQwen2ModelInfer(
+                    self._model, arr, c_size_t(ntoken)
+                )
+            else:
+                # Sampling: use forward to get logits
+                if logits is None or len(logits) != self._voc_size:
+                    logits = np.zeros(self._voc_size, dtype=np.float32)
+                logits_ptr = logits.ctypes.data_as(POINTER(c_float))
+                LIB_LLAISYS.llaisysQwen2ModelForward(
+                    self._model, arr, c_size_t(ntoken), logits_ptr
+                )
+                next_token = sample(logits, temperature, top_k, top_p)
+
+                # Update arr for next iteration
+                arr_type = c_int64 * (ntoken + 1)
+                new_arr = arr_type(*token_ids, next_token)
+                arr = new_arr
 
             token_ids.append(next_token)
 
@@ -206,6 +240,128 @@ class Qwen2:
                 break
 
         return token_ids
+
+    def generate_stream(
+        self,
+        inputs: Sequence[int],
+        max_new_tokens: int = 128,
+        top_k: int = 0,
+        top_p: float = 1.0,
+        temperature: float = 0.8,
+    ):
+        """Generator that yields tokens one by one.
+
+        Args:
+            inputs: Input token IDs.
+            max_new_tokens: Maximum number of tokens to generate.
+            top_k: Top-k filtering. 0 = disabled.
+            top_p: Top-p (nucleus) filtering. 1.0 = disabled.
+            temperature: Temperature for sampling. 0 = greedy.
+
+        Yields:
+            Individual token IDs as they are generated.
+        """
+        token_ids = list(inputs)
+        ntoken = len(token_ids)
+        arr_type = c_int64 * ntoken
+        arr = arr_type(*token_ids)
+
+        logits = None
+
+        for _ in range(max_new_tokens):
+            ntoken = len(token_ids)
+
+            if temperature <= 0:
+                next_token = LIB_LLAISYS.llaisysQwen2ModelInfer(
+                    self._model, arr, c_size_t(ntoken)
+                )
+            else:
+                if logits is None or len(logits) != self._voc_size:
+                    logits = np.zeros(self._voc_size, dtype=np.float32)
+                logits_ptr = logits.ctypes.data_as(POINTER(c_float))
+                LIB_LLAISYS.llaisysQwen2ModelForward(
+                    self._model, arr, c_size_t(ntoken), logits_ptr
+                )
+                next_token = sample(logits, temperature, top_k, top_p)
+
+                arr_type = c_int64 * (ntoken + 1)
+                new_arr = arr_type(*token_ids, next_token)
+                arr = new_arr
+
+            token_ids.append(next_token)
+            yield next_token
+
+            if next_token == self._end_token:
+                break
+
+    def chat(
+        self,
+        messages: List[Dict[str, str]],
+        tokenizer,
+        max_new_tokens: int = 128,
+        top_k: int = 0,
+        top_p: float = 1.0,
+        temperature: float = 0.8,
+        stream: bool = False,
+    ):
+        """Generate a response for a chat conversation.
+
+        Args:
+            messages: List of chat message dicts with 'role' and 'content'.
+            tokenizer: HuggingFace tokenizer instance.
+            max_new_tokens: Maximum number of tokens to generate.
+            top_k: Top-k filtering. 0 = disabled.
+            top_p: Top-p (nucleus) filtering. 1.0 = disabled.
+            temperature: Temperature for sampling. 0 = greedy.
+            stream: If True, yields tokens one at a time.
+
+        Returns:
+            If stream=False: Generated text string.
+            If stream=True: Generator yielding token text pieces.
+        """
+        from .chat_format import format_chat_prompt
+
+        prompt = format_chat_prompt(messages, add_generation_prompt=True)
+        inputs = tokenizer.encode(prompt)
+
+        if stream:
+            return self._stream_chat_response(inputs, tokenizer, max_new_tokens, top_k, top_p, temperature)
+        else:
+            output_ids = self.generate(
+                inputs,
+                max_new_tokens=max_new_tokens,
+                top_k=top_k,
+                top_p=top_p,
+                temperature=temperature,
+            )
+            return tokenizer.decode(output_ids, skip_special_tokens=True)
+
+    def _stream_chat_response(
+        self,
+        inputs: List[int],
+        tokenizer,
+        max_new_tokens: int,
+        top_k: int,
+        top_p: float,
+        temperature: float,
+    ):
+        """Stream chat response yielding text chunks."""
+        generated_ids = list(inputs)
+        for token_id in self.generate_stream(
+            inputs,
+            max_new_tokens=max_new_tokens,
+            top_k=top_k,
+            top_p=top_p,
+            temperature=temperature,
+        ):
+            generated_ids.append(token_id)
+            # Decode the accumulated text to get the latest chunk
+            text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+            yield text
+
+    def reset_kv(self):
+        """Reset KV-cache for a new conversation."""
+        LIB_LLAISYS.llaisysQwen2ModelResetKV(self._model)
 
     def __del__(self):
         if hasattr(self, "_model") and self._model:

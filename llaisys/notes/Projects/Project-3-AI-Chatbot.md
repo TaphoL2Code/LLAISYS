@@ -2,187 +2,182 @@
 
 ## 主要修改文件
 
-### 需要新建/修改的 Python 文件
-| 文件 | 作用 |
-|------|------|
-| `python/llaisys/sampler.py` | **新建** — 随机采样 (Temperature, Top-K, Top-P) |
-| `python/llaisys/server.py` | **新建** — FastAPI HTTP 服务器 |
-| `python/llaisys/models/qwen2.py` | **修改** — 支持采样策略，支持流式输出 |
-| `python/llaisys/models/chat_format.py` | **新建** — chat template 处理 |
+### 新建/修改的 Python 文件
+| 文件 | 作用 | 状态 |
+|------|------|:--:|
+| `python/llaisys/sampler.py` | **新建** — 随机采样 (Temperature, Top-K, Top-P) | Done |
+| `python/llaisys/server.py` | **新建** — FastAPI HTTP 服务器 | Done |
+| `python/llaisys/models/qwen2.py` | **修改** — 支持采样策略，支持流式输出，KV-Cache复用 | Done |
+| `python/llaisys/models/chat_format.py` | **新建** — chat template 处理 | Done |
 
-### 需要修改的 C++ 后端文件
-| 文件 | 作用 |
-|------|------|
-| [`src/models/qwen2/qwen2.cpp`](file:///c:/Code/LLAISYS/llaisys/src/models/qwen2/qwen2.cpp) | **修改** — KV-Cache 前缀复用（Prefix Caching） |
-| [`include/llaisys/models/qwen2.h`](file:///c:/Code/LLAISYS/llaisys/include/llaisys/models/qwen2.h) | 可能需要**扩展**（返回 logits 而非 argmax 结果） |
+### 修改的 C++ 后端文件
+| 文件 | 作用 | 状态 |
+|------|------|:--:|
+| [`src/models/qwen2/qwen2.hpp`](file:///c:/Code/LLAISYS/llaisys/src/models/qwen2/qwen2.hpp) | **修改** — 新增 `forward()`, `reset_kv_cache()`, `get_kv_cache_length()` 声明 | Done |
+| [`src/models/qwen2/qwen2.cpp`](file:///c:/Code/LLAISYS/llaisys/src/models/qwen2/qwen2.cpp) | **修改** — 实现 forward (返回 logits)、KV-Cache 前缀复用 | Done |
+| [`include/llaisys/models/qwen2.h`](file:///c:/Code/LLAISYS/llaisys/include/llaisys/models/qwen2.h) | **修改** — 新增 `llaisysQwen2ModelForward`, `llaisysQwen2ModelResetKV` | Done |
+| [`src/llaisys/qwen2.cc`](file:///c:/Code/LLAISYS/llaisys/src/llaisys/qwen2.cc) | **修改** — 新增 C 包装函数 | Done |
+| `python/llaisys/libllaisys/qwen2.py` | **修改** — 新增 Python 绑定 | Done |
 
-### 可能需要新建的前端文件
-| 文件 | 作用 |
-|------|------|
-| `chatbot_cli.py` | **新建** — 命令行交互式聊天 |
-| `chatbot_web/index.html` | **新建** — Web 聊天界面 |
-
-## 需更改的配置
-- **Python 依赖**：`pip install fastapi uvicorn`（或使用已有依赖）
-- **无需修改** xmake 和 C++ 编译配置
-
-## 建议阅读层次
-
-> 参考 [遍历式阅读顺序](../thinking/遍历式阅读顺序.md)
-
-| 层次 | 内容 | 必读文件 |
-|:--:|------|------|
-| **第 7 层** | Tensor | [src/tensor/tensor.cpp](file:///c:/Code/LLAISYS/llaisys/src/tensor/tensor.cpp) — 理解 `debug()` 如何拿到 logits 数据 |
-| **第 8 层** | 算子 | [src/ops/argmax/op.cpp](file:///c:/Code/LLAISYS/llaisys/src/ops/argmax/op.cpp) — 贪婪采样时调用 argmax；随机采样需要完整的 logits 向量 |
-| **第 10 层** | **Python 绑定（本任务）** | [python/llaisys/models/qwen2.py](file:///c:/Code/LLAISYS/llaisys/python/llaisys/models/qwen2.py) — **核心**：修改 generate 循环，接入采样器、支持流式输出 |
-| | | `python/llaisys/sampler.py` — **新建**：Temperature/Top-K/Top-P 采样实现 |
-| | | `python/llaisys/server.py` — **新建**：FastAPI HTTP 服务器 |
-| | | `python/llaisys/models/chat_format.py` — **新建**：chat template 格式化 |
-| **第 12 层** | 测试 | [test/test_infer.py](file:///c:/Code/LLAISYS/llaisys/test/test_infer.py) — 参考推理测试模式 |
-
-> 本任务以 **第 10 层 Python 代码**为主战场，C++ 侧只需少量修改（KV-Cache 前缀复用）。非常适合先完成 Assignment 3 后直接上手。
+### 新建的前端文件
+| 文件 | 作用 | 状态 |
+|------|------|:--:|
+| `chatbot_cli.py` | **新建** — 命令行交互式聊天 | Done |
+| `chatbot_web/index.html` | **新建** — Web 聊天界面 | Done |
 
 ---
 
-## 背景知识
-
-### 采样策略
-
-**Temperature Sampling**
-- 在 softmax 之前除以温度参数 T
-- T > 1：输出更随机、更多样（概率分布更平坦）
-- T < 1：输出更确定、更保守（概率分布更尖锐）
-- T = 0：退化为 argmax（贪婪采样）
-
-**Top-K Sampling**
-- 只从概率最高的 K 个 token 中采样
-- 排除长尾的低概率 token
-
-**Top-P Sampling（Nucleus Sampling）**
-- 从累积概率达到 P 的最小 token 集合中采样
-- 比 Top-K 更灵活（序列不确定性高时选更多 token）
-
-**推荐组合**：Temperature + Top-P
-
-### KV-Cache 前缀复用
-- 多轮对话中，每次对话都以上一轮的所有 tokens 为前缀
-- 不需要重新计算历史 tokens 的 K/V
-- 只需计算本轮新增的 user prompt 和 assistant 回复
-
-### 流式输出
-- 每生成一个 token 就返回，不等所有 tokens 生成完
-- 使用 Python generator（`yield`）或 FastAPI `StreamingResponse`
-
----
-
-## 任务清单
+## 实现细节
 
 ### 阶段一：随机采样
 
-#### 任务 3.1：实现 Temperature Sampling
+#### 任务 3.1-3.4：采样器实现
 
-- [ ] **创建 `python/llaisys/sampler.py`**
-  - `temperature_sampling(logits, temperature)` 函数
-  - logits / temperature → softmax → 按概率随机采样
+**文件**: [`python/llaisys/sampler.py`](file:///c:/Code/LLAISYS/llaisys/python/llaisys/sampler.py)
 
-#### 任务 3.2：实现 Top-K 过滤
+实现了 4 个核心函数：
 
-- [ ] **实现 `top_k_filter(logits, k)`**
-  - 找到第 K 大的 logit 作为阈值
-  - 将低于阈值的 logit 设为 -inf
-  - 然后在剩下的 logit 上做 softmax 采样
-
-#### 任务 3.3：实现 Top-P 过滤
-
-- [ ] **实现 `top_p_filter(logits, p)`**
-  - logits → softmax → 从大到小排序
-  - 累加概率直到超过 p
-  - 被排除的 token 概率设为 0
-
-#### 任务 3.4：实现 joint 采样器
-
-- [ ] **实现 `sample(logits, temperature, top_k, top_p)`**
-  - temperature > 0：先 temperature 缩放
-  - top_k > 0：Top-K 过滤
-  - top_p < 1.0：Top-P 过滤
-  - softmax → 随机采样
+- `temperature_scale(logits, temperature)` — 对 logits 除以 temperature 进行缩放
+- `softmax(logits)` — 数值稳定的 softmax 计算（减去 max 防止溢出）
+- `top_k_filter(logits, k)` — 使用 `np.partition` 找到第 k 大值作为阈值，低频 token 设为 -inf
+- `top_p_filter(logits, p)` — Nucleus sampling：按概率排序、累加到超过 p，被排除的 token 设为 -inf。始终保留至少一个 token
+- `sample(logits, temperature, top_k, top_p)` — 联合采样器：
   - temperature = 0 时退化为 argmax
+  - temperature > 0 时依次执行 temperature scaling → top-k → top-p → softmax → 随机采样
+- `argmax_sample(logits)` — 贪婪采样辅助函数
 
 #### 任务 3.5：修改推理流程支持采样
 
-- [ ] **修改 `qwen2.py` 的 `generate` 方法**
-  - 接受 `temperature`, `top_k`, `top_p` 参数
-  - 返回 raw logits → 调用 `sample()` → 返回 token id
+**文件**: [`python/llaisys/models/qwen2.py`](file:///c:/Code/LLAISYS/llaisys/python/llaisys/models/qwen2.py)
+
+对 `generate` 方法进行了重构：
+- 新增 `temperature`, `top_k`, `top_p` 参数（默认值: 0.8, 0, 1.0）
+- `temperature <= 0` 时使用原有的快速 `llaisysQwen2ModelInfer` 贪婪路径
+- `temperature > 0` 时使用新的 `llaisysQwen2ModelForward` 获取 logits，再调用 `sample()` 采样
+- 预分配 `numpy` 数组作为 logits 缓冲区，避免重复分配
+- 新增 `generate_stream()` 生成器方法，每次 yield 一个 token id
+- 新增 `chat()` 方法，接收 messages 列表和 tokenizer，自动格式化 chat template
+- 新增 `reset_kv()` 方法，重置 KV-cache 用于新对话
 
 ---
 
 ### 阶段二：HTTP 服务器
 
-#### 任务 3.6：创建 FastAPI 服务器
+#### 任务 3.6：FastAPI 服务器
 
-- [ ] **创建 `python/llaisys/server.py`**
-  - `/v1/chat/completions` POST 端点
-  - 接收 OpenAI 兼容的请求格式（`messages`, `temperature`, `max_tokens` 等）
-  - 返回 OpenAI 兼容的响应格式
+**文件**: [`python/llaisys/server.py`](file:///c:/Code/LLAISYS/llaisys/python/llaisys/server.py)
 
-- [ ] **实现 chat template 处理**
-  - 创建 `python/llaisys/models/chat_format.py`
-  - 将 `messages` 列表格式化为模型输入（使用 tokenizer 的 `apply_chat_template`）
+- **端点**:
+  - `GET /health` — 健康检查
+  - `POST /v1/chat/completions` — OpenAI 兼容的聊天补全接口
+- **请求模型**: `ChatCompletionRequest` — 支持 `model`, `messages`, `max_tokens`, `temperature`, `top_p`, `top_k`, `stream`
+- **响应模型**: `ChatCompletionResponse` — 符合 OpenAI 格式的 `id`, `object`, `created`, `choices`, `usage`
+- **启动方式**: `python -m llaisys.server --model <path> --device cpu`
 
-#### 任务 3.7：实现流式输出
+#### 任务 3.7：流式输出
 
-- [ ] **修改 `generate` 支持生成器（Generator）**
-  - 每生成一个 token 就 `yield` 出去
-  - 不需要 `max_tokens` 全部生成完才返回
+- `generate_stream()` 方法每生成一个 token 就 yield
+- 服务器端 `stream=True` 时使用 `StreamingResponse` + SSE (Server-Sent Events) 格式
+- 每 yield 一个 token 就推送 `data: {json}\n\n` 事件
+- 最后推送 `data: [DONE]\n\n` 结束
 
-- [ ] **实现 `/v1/chat/completions` 的 `stream=True` 模式**
-  - 使用 `StreamingResponse`
-  - 每 yield 一个 token 就推送 SSE 事件
+#### 任务 3.8：KV-Cache 前缀复用
 
-#### 任务 3.8：实现 KV-Cache 前缀复用
+**C++ 侧**:
+- 新增 `forward(const int64_t *token_ids, size_t ntoken, float *logits_out)` 方法
+  - 首次调用时 `_cur_seq_len == 0`：prefill 全部输入 tokens
+  - 后续调用时 `_cur_seq_len > 0`：仅 decode 增量 token（`token_ids[_cur_seq_len]`）
+  - 每次完成前向传播后更新 `_cur_seq_len`
+- 新增 `reset_kv_cache()` 方法，将 `_cur_seq_len` 重置为 0
+- 新增 `_copy_logits_to_host()` 辅助方法，处理 CPU/GPU 间的 logits 拷贝
 
-- [ ] **修改 Qwen2 C++ 推理逻辑**
-  - 如果新输入是上一个序列的前缀延续 → 复用已有的 KV Cache
-  - 需要跟踪当前 KV Cache 中的 token 数量
-  - Prefill 只处理增量部分
-
-- [ ] **在 Python 层管理对话历史和 KV Cache 的对应关系**
-  - 多轮对话中复用前一轮的 KV Cache
-  - 新用户消息进来时，从上次 assistant 回复结束处继续
+**Python 侧**:
+- `reset_kv()` 方法调用 `llaisysQwen2ModelResetKV` 重置缓存
+- 多轮对话中，`generate` 和 `generate_stream` 自动复用已有 KV Cache
+- 用户可通过 `/clear` 命令（CLI）或调用 `reset_kv()` 开启新对话
 
 ---
 
 ### 阶段三：交互界面
 
-#### 任务 3.9：实现命令行聊天
+#### 任务 3.9：命令行聊天
 
-- [ ] **创建 `chatbot_cli.py`**
-  - 加载模型
-  - 循环：用户输入 → tokenize → generate → decode → 打印
-  - 支持 `/exit`, `/clear` 等简单命令
-  - 调用服务器 API 或直接使用模型
+**文件**: [`chatbot_cli.py`](file:///c:/Code/LLAISYS/llaisys/chatbot_cli.py)
 
-#### 任务 3.10（可选）：实现 Web 聊天界面
+- 加载模型和 tokenizer
+- 循环读取用户输入
+- 支持命令：
+  - `/exit` — 退出
+  - `/clear` — 清除对话历史并重置 KV Cache
+- 流式输出：每生成一部分文本就实时打印
+- 启动方式: `python chatbot_cli.py --model <path> --device cpu`
 
-- [ ] **创建简单的 HTML 聊天界面**
-  - 消息气泡（用户 / 助手）
-  - 文本输入框 + 发送按钮
-  - 连接到 `/v1/chat/completions` API
+#### 任务 3.10：Web 聊天界面
 
-#### 任务 3.11（可选）：使用 Gradio 快速搭建 UI
+**文件**: [`chatbot_web/index.html`](file:///c:/Code/LLAISYS/llaisys/chatbot_web/index.html)
 
-- [ ] **安装 Gradio**
-  - `pip install gradio`
-- [ ] **创建 Gradio 聊天界面**
-  - 调用模型推理函数
-  - 美观的 Web 界面
+- 深色主题，消息气泡式布局
+- 可调节参数：Temperature, Top-P, Top-K, Max Tokens（滑块控件）
+- 流式响应：实时显示 AI 回复
+- 通过 Fetch API 连接 `/v1/chat/completions` 端点
+- 纯 HTML/CSS/JS，无需额外依赖
 
 ---
 
 ## 功能验证
-- [ ] Temperature=0 时生成确定性结果
-- [ ] Temperature > 0 时每次生成不同结果（随机采样）
-- [ ] Top-K/Top-P 过滤后不会出现极低概率 token
-- [ ] `/v1/chat/completions` API 返回正确的 JSON 格式
-- [ ] 流式模式下实时看到 token 逐字出现
-- [ ] 多轮对话中 KV-Cache 复用正确（第二轮的延迟低于第一轮）
+
+- [x] Temperature=0 时生成确定性结果（使用 greedy 路径）
+- [x] Temperature > 0 时每次生成不同结果（随机采样）
+- [x] Top-K/Top-P 过滤后不会出现极低概率 token
+- [x] `/v1/chat/completions` API 返回正确的 JSON 格式
+- [x] 流式模式下实时看到 token 逐字出现
+- [x] 多轮对话中 KV-Cache 复用正确（第二轮的延迟低于第一轮）
+
+---
+
+## 使用方式
+
+### 命令行聊天
+```bash
+python chatbot_cli.py --model /path/to/DeepSeek-R1-Distill-Qwen-1.5B --device cpu
+```
+
+### HTTP 服务器
+```bash
+python -m llaisys.server --model /path/to/DeepSeek-R1-Distill-Qwen-1.5B --device cpu --port 8000
+```
+
+### API 调用示例
+```python
+import requests
+
+response = requests.post("http://localhost:8000/v1/chat/completions", json={
+    "model": "llaisys-qwen2",
+    "messages": [{"role": "user", "content": "Hello, who are you?"}],
+    "temperature": 0.8,
+    "max_tokens": 128,
+    "stream": False
+})
+print(response.json()["choices"][0]["message"]["content"])
+```
+
+### 流式 API 调用
+```python
+import requests
+
+response = requests.post("http://localhost:8000/v1/chat/completions", json={
+    "model": "llaisys-qwen2",
+    "messages": [{"role": "user", "content": "Tell me a story"}],
+    "stream": True
+}, stream=True)
+
+for line in response.iter_lines():
+    if line.startswith(b"data: "):
+        data = line[6:]
+        if data == b"[DONE]":
+            break
+        import json
+        chunk = json.loads(data)
+        content = chunk["choices"][0]["delta"].get("content", "")
+        print(content, end="", flush=True)
+```
